@@ -1,0 +1,60 @@
+name: Build Pip AI Horror Mod (.jar)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Forge 1.20.1)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Extract uploaded .zip if present and build JAR
+        run: |
+          shopt -s nullglob
+          for z in *.zip; do
+            echo "Extracting $z..."
+            unzip -oq "$z" -d . || python3 -m zipfile -e "$z" .
+          done
+          BUILD_FILE=$(find . -maxdepth 3 -name "build.gradle" | head -n 1)
+          if [ -z "$BUILD_FILE" ]; then
+            echo "ERROR: No build.gradle found in this repository."
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
+          echo "Building Forge mod in: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew build --no-daemon
+          else
+            gradle build --no-daemon
+          fi
+          ls -lh build/libs
+
+      - name: Upload Mod JAR Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: piphorror-1.20.1-jar
+          path: |
+            **/build/libs/*.jar
+            !**/build/libs/*-sources.jar
+            !**/build/libs/*-dev.jar
+            !**/build/libs/*-plain.jar
